@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hebrew Manuscripts of the 14th Century — Atlas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #fafaf6;
+    --ink: #2a2a28;
+    --muted: #6b6b66;
+    --line: #d8d6cc;
+    --accent: #1d4e5f;
+    --accent-soft: rgba(29, 78, 95, 0.55);
+    --panel-bg: #ffffff;
+    --highlight: #c44d40;
+    --serif: "Georgia", "Cambria", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  header {
+    padding: 18px 28px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+  header h1 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+  header .subtitle {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  header .stats {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  header .stats strong { color: var(--ink); font-weight: 500; }
+  main {
+    position: relative;
+    height: calc(100vh - 110px);
+    min-height: 480px;
+  }
+  #map {
+    position: absolute;
+    inset: 0;
+    background: #eee8df;
+  }
+  .leaflet-container {
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+  .map-tooltip {
+    background: var(--ink);
+    color: #fff;
+    border: 0;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  .map-tooltip:before { display: none; }
+  .map-tooltip .place-name { font-weight: 500; }
+  .map-tooltip .place-count { opacity: 0.75; margin-left: 4px; }
+
+  /* side panel */
+  #panel {
+    position: absolute;
+    top: 0; right: 0;
+    width: 420px;
+    max-width: 90%;
+    height: 100%;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--line);
+    box-shadow: -4px 0 18px rgba(0,0,0,0.08);
+    transform: translateX(100%);
+    transition: transform 0.28s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 500;
+  }
+  #panel.open { transform: translateX(0); }
+  #panel-head {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  #panel-title {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 500;
+  }
+  #panel-sub {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #panel-close {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    margin-top: -2px;
+  }
+  #panel-close:hover { color: var(--ink); }
+  #panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 20px 20px;
+  }
+  .ms {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ms:last-child { border-bottom: 0; }
+  .ms-year {
+    display: inline-block;
+    font-family: var(--serif);
+    font-size: 16px;
+    color: var(--accent);
+    font-weight: 500;
+    margin-right: 8px;
+    min-width: 44px;
+  }
+  .ms-title {
+    font-size: 14px;
+    color: var(--ink);
+    display: inline;
+    unicode-bidi: plaintext;
+  }
+  .ms-meta {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 52px;
+  }
+  .ms-meta > span { margin-right: 10px; }
+  .ms-meta .shelf { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 11px; }
+  .ms-link {
+    display: inline-block;
+    margin-top: 4px;
+    margin-left: 52px;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .ms-link:hover { color: var(--highlight); border-bottom-style: solid; }
+
+  footer {
+    padding: 8px 28px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--bg);
+  }
+  footer a { color: var(--muted); }
+
+  /* legend in lower-left */
+  .legend {
+    background: rgba(255,255,255,0.92);
+    padding: 10px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+    backdrop-filter: blur(4px);
+  }
+  .legend-title { color: var(--ink); font-weight: 500; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .legend-dots {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .legend-dot {
+    background: var(--accent-soft);
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  @media (max-width: 640px) {
+    header { padding: 14px 16px 10px; }
+    header h1 { font-size: 18px; }
+    main { height: calc(100vh - 96px); }
+    #panel { width: 100%; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Hebrew Manuscripts of the 14th Century</h1>
+    <div class="subtitle">Place of writing, from the National Library of Israel <em>Ktiv</em> catalog</div>
+    <div class="stats" id="stats">Loading…</div>
+  </header>
+  <main>
+    <div id="map"></div>
+    <aside id="panel" aria-hidden="true">
+      <div id="panel-head">
+        <div>
+          <h2 id="panel-title">—</h2>
+          <p id="panel-sub">—</p>
+        </div>
+        <button id="panel-close" aria-label="Close">×</button>
+      </div>
+      <div id="panel-body"></div>
+    </aside>
+  </main>
+  <footer id="footer">—</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+<script>
+(function() {
+  const ACCENT = "#1d4e5f";
+  const ACCENT_FILL = "rgba(29, 78, 95, 0.55)";
+
+  // proportional radius — area scales linearly with count via sqrt of radius
+  function radius(count, maxCount) {
+    const minR = 5, maxR = 18;
+    const t = Math.sqrt(count / maxCount);
+    return minR + (maxR - minR) * t;
+  }
+
+  function ktivUrl(id) {
+    if (!id) return null;
+    const m = id.match(/\(IsJJNL\)(\d+)/);
+    if (!m) return null;
+    return "https://www.nli.org.il/en/manuscripts/NNL_ALEPH" + m[1] + "/NLI";
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return "";
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderManuscript(m) {
+    const url = ktivUrl(m.id);
+    const link = url
+      ? '<a class="ms-link" href="' + url + '" target="_blank" rel="noopener">view on Ktiv →</a>'
+      : "";
+    const metaBits = [];
+    if (m.language) metaBits.push('<span>' + escapeHtml(m.language) + '</span>');
+    if (m.holding_library) metaBits.push('<span>' + escapeHtml(m.holding_library) + '</span>');
+    if (m.shelfmark) metaBits.push('<span class="shelf">' + escapeHtml(m.shelfmark) + '</span>');
+    return (
+      '<div class="ms">' +
+        '<span class="ms-year">' + (m.year || "—") + '</span>' +
+        '<span class="ms-title">' + escapeHtml(m.title || "(no title)") + '</span>' +
+        (metaBits.length ? '<div class="ms-meta">' + metaBits.join("") + '</div>' : "") +
+        link +
+      '</div>'
+    );
+  }
+
+  const panelEl = document.getElementById("panel");
+  const panelTitle = document.getElementById("panel-title");
+  const panelSub = document.getElementById("panel-sub");
+  const panelBody = document.getElementById("panel-body");
+  document.getElementById("panel-close").addEventListener("click", () => {
+    panelEl.classList.remove("open");
+    panelEl.setAttribute("aria-hidden", "true");
+  });
+
+  function openPanel(place) {
+    panelTitle.textContent = place.place;
+    const word = place.count === 1 ? "manuscript" : "manuscripts";
+    panelSub.textContent = place.count + " " + word + " written here";
+    panelBody.innerHTML = place.manuscripts.map(renderManuscript).join("");
+    panelBody.scrollTop = 0;
+    panelEl.classList.add("open");
+    panelEl.setAttribute("aria-hidden", "false");
+  }
+
+  fetch("atlas_data.json")
+    .then(r => r.json())
+    .then(data => {
+      const meta = data.meta;
+      const places = data.places;
+      const maxCount = places.reduce((m, p) => Math.max(m, p.count), 1);
+
+      document.getElementById("stats").innerHTML =
+        '<strong>' + meta.rendered + '</strong> manuscripts at <strong>' +
+        meta.unique_places + '</strong> places  ·  ' +
+        (meta.total_records_in_subset - meta.rendered) +
+        ' excluded (region-only attribution)';
+
+      document.getElementById("footer").innerHTML =
+        'Demo · data from <a href="https://www.nli.org.il/en/discover/manuscripts/hebrew-manuscripts" ' +
+        'target="_blank" rel="noopener">NLI Ktiv catalog</a>, MARC 008 + 751a fields · ' +
+        meta.rendered + ' of ' + meta.total_records_in_subset +
+        ' 14th-century records with city-level place of writing';
+
+      const map = L.map("map", {
+        center: [40.5, 14],
+        zoom: 4,
+        minZoom: 3,
+        maxZoom: 10,
+        zoomControl: true,
+        worldCopyJump: false,
+      });
+
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          subdomains: "abcd",
+          maxZoom: 19,
+        }
+      ).addTo(map);
+
+      places.forEach(place => {
+        const marker = L.circleMarker([place.lat, place.lon], {
+          radius: radius(place.count, maxCount),
+          color: ACCENT,
+          weight: 1.5,
+          fillColor: ACCENT,
+          fillOpacity: 0.45,
+          opacity: 0.9,
+        }).addTo(map);
+
+        const word = place.count === 1 ? "ms" : "mss";
+        marker.bindTooltip(
+          '<span class="place-name">' + escapeHtml(place.place) + '</span>' +
+          '<span class="place-count">· ' + place.count + ' ' + word + '</span>',
+          { className: "map-tooltip", direction: "top", offset: [0, -2] }
+        );
+
+        marker.on("click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          openPanel(place);
+        });
+      });
+
+      // Legend
+      const legend = L.control({ position: "bottomleft" });
+      legend.onAdd = function() {
+        const div = L.DomUtil.create("div", "legend");
+        div.innerHTML =
+          '<div class="legend-title">Manuscripts per place</div>' +
+          '<div class="legend-dots">' +
+            '<span class="legend-dot" style="width:10px;height:10px"></span><span>1</span>' +
+            '<span class="legend-dot" style="width:20px;height:20px"></span><span>10</span>' +
+            '<span class="legend-dot" style="width:36px;height:36px"></span><span>22</span>' +
+          '</div>';
+        return div;
+      };
+      legend.addTo(map);
+
+      // Close panel when clicking the map background (not a marker)
+      map.on("click", () => {
+        if (panelEl.classList.contains("open")) {
+          panelEl.classList.remove("open");
+          panelEl.setAttribute("aria-hidden", "true");
+        }
+      });
+    })
+    .catch(err => {
+      console.error("Failed to load atlas_data.json", err);
+      document.getElementById("stats").textContent =
+        "Failed to load data. Make sure atlas_data.json sits next to index.html.";
+    });
+})();
+</script>
+</body>
+</html>
